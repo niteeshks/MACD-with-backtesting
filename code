@@ -1,0 +1,66 @@
+# Import libraries **********************************
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import yfinance as yf
+from datetime import datetime, timedelta
+
+# defining variables !*******************************
+ticker = input("Please enter stock code:")
+period= int(input("Please enter backtesting period (days):"))
+start = datetime.today()-timedelta(days=period)
+short_MA = int(input("Please enter short period MA days (preferred 5 0r 12):"))
+long_MA = int(input("Please enter long period MA days (preferred 12 0r 26):"))
+
+# downloading data ************************
+data=yf.download(ticker, start)
+
+# Calculating Return and moving averages
+data['Return']=data['Close'].pct_change()
+data['MA_'+str(short_MA)]=data['Close'].ewm(span=short_MA, adjust=False).mean()
+data['MA_'+str(long_MA)]=data['Close'].ewm(span=long_MA, adjust=False).mean()
+data=data[data.index > start+timedelta(days=long_MA)]
+
+buy_flag = False
+sell_flag = False
+MACD_ret=[]
+
+# finding signal state based on short and long MA (Gives 1 for buy signal and -1 for sell signal)
+data['Signal']= 2*(data['MA_'+str(short_MA)] > data['MA_'+str(long_MA)])-1
+x=data['Signal'][0]
+
+# Loop for finding first crossover of MAs and getting final signals
+for i in range(0,len(data)):
+    if x == data['Signal'][i]:
+        MACD_ret.append(0)
+    else:
+        MACD_ret.append(data['Signal'][i])
+        x= 2
+
+data['BnH'] = data['Return']
+
+# Buy and hold returns start from second days
+data['BnH'][0] = 0.0
+
+data['Final_signal']=pd.Series(MACD_ret).values
+
+#Finding MACD returns
+data['MACD_return']= data['BnH']*data['Final_signal']
+
+#Finding Cumulative returns for both buy and hold and MACD signal
+data['BnH_cum']=data['BnH'].cumsum()*100
+data['MACD_return_cum']=data['MACD_return'].cumsum()*100
+
+#Saving data file
+#data.to_csv('data.csv')
+
+#Plotting buy and hold and MACD return
+x=round(data['BnH_cum'][-1],2)
+y=round(data['MACD_return_cum'][-1],2)
+plt.plot(data['BnH_cum'], color='black', label='Buy and Hold')
+plt.plot(data['MACD_return_cum'], color='darkblue', label="MACD Returns")
+plt.title(ticker.upper()+" Buy and Hold vs. MACD Based Active Trade")
+plt.legend(loc='upper left')
+print('Buy and Hold Return : ' + str(x) +"%")
+print('MACD Return : ' + str(y) +"%")
+plt.show()
